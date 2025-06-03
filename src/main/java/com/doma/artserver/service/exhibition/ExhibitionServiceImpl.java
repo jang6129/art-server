@@ -50,30 +50,61 @@ public class ExhibitionServiceImpl implements ExhibitionService {
 
     @Transactional
     public void fetchExhibitions(int maxPage) {
+        logger.info("Starting to fetch exhibition data with max page: {}", maxPage);
         int page = 1;
         boolean isDbEmpty = exhibitionRepository.count() == 0;
-        logger.info("전시 수 : {}", exhibitionRepository.count());
+        logger.info("Current exhibition count in database: {}", exhibitionRepository.count());
 
-        if (!isDbEmpty) maxPage = NON_EMPTY_DB_MAX_PAGE;
+        if (!isDbEmpty) {
+            maxPage = NON_EMPTY_DB_MAX_PAGE;
+            logger.info("Database is not empty, limiting fetch to {} pages", maxPage - 1);
+        }
+
+        int totalSaved = 0;
+        int totalSkipped = 0;
 
         while (page < maxPage) {
+            logger.info("Fetching exhibition data from API - page {}/{}", page, maxPage - 1);
             List<MunwhaExhibitionDTO> list = apiClient.fetchItems(page);
+            logger.info("Received {} exhibitions from API on page {}", list.size(), page);
+
+            int pageSaved = 0;
+            int pageSkipped = 0;
 
             for (MunwhaExhibitionDTO dto : list) {
                 Optional<Exhibition> existingExhibition = exhibitionRepository.findByApiId(dto.getSeq());
 
                 if (existingExhibition.isEmpty()) {
+                    if (dto.getStartDate() == null) {
+                        logger.debug("Skipping exhibition with null startDate: {}", dto.getTitle());
+                        pageSkipped++;
+                        continue;
+                    }
+
                     Optional<Museum> museum = museumRepository.findByName(dto.getPlace());
                     if (museum.isPresent()) {
+                        logger.debug("Saving exhibition: {} at museum: {}", dto.getTitle(), museum.get().getName());
                         exhibitionRepository.save(dto.toEntity(museum.get()));
                     } else {
+                        logger.debug("Saving exhibition: {} with unknown museum", dto.getTitle());
                         exhibitionRepository.save(dto.toEntity(Museum.builder().name("정보 없음").build()));
                     }
+                    pageSaved++;
+                } else {
+                    logger.debug("Skipping existing exhibition: {}", dto.getTitle());
+                    pageSkipped++;
                 }
             }
+
+            totalSaved += pageSaved;
+            totalSkipped += pageSkipped;
+            logger.info("Page {} processing complete: {} exhibitions saved, {} existing exhibitions skipped", 
+                    page, pageSaved, pageSkipped);
             page++;
         }
-        System.out.println("전시 로딩 완료");
+
+        logger.info("Exhibition data fetch completed. Total: {} saved, {} skipped. Total in database: {}", 
+                totalSaved, totalSkipped, exhibitionRepository.count());
     }
 
     @Override
@@ -139,6 +170,12 @@ public class ExhibitionServiceImpl implements ExhibitionService {
     }
 
     private void updateExhibitionStatus(Exhibition exhibition, LocalDate today) {
+        // Skip status update if startDate or endDate is null
+        if (exhibition.getStartDate() == null || exhibition.getEndDate() == null) {
+            logger.warn("Exhibition with id {} has null startDate or endDate. Status not updated.", exhibition.getId());
+            return;
+        }
+
         if (exhibition.getStartDate().isAfter(today)) {
             exhibition.setStatus(ExhibitionStatus.SCHEDULED);
         } else if ((exhibition.getStartDate().isBefore(today) || exhibition.getStartDate().isEqual(today)) && exhibition.getEndDate().isAfter(today)) {

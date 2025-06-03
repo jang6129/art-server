@@ -132,4 +132,35 @@ public class ExhibitionServiceImplTest {
         assertEquals(ExhibitionStatus.SCHEDULED, exhibition1.getStatus());
         assertEquals(ExhibitionStatus.COMPLETED, exhibition2.getStatus());
     }
+
+    @Test
+    public void testFetchExhibitionsWithNullStartDate() {
+        // Given
+        MunwhaExhibitionDTO validExhibition = new MunwhaExhibitionDTO();
+        validExhibition.setTitle("Valid Exhibition");
+        validExhibition.setPlace("Museum A");
+        validExhibition.setStartDate(LocalDate.now());
+        validExhibition.setEndDate(LocalDate.now().plusDays(10));
+        validExhibition.setSeq(1L);
+
+        MunwhaExhibitionDTO nullStartDateExhibition = new MunwhaExhibitionDTO();
+        nullStartDateExhibition.setTitle("Null StartDate Exhibition");
+        nullStartDateExhibition.setPlace("Museum B");
+        nullStartDateExhibition.setStartDate(null); // Explicitly set null startDate
+        nullStartDateExhibition.setEndDate(LocalDate.now().plusDays(10));
+        nullStartDateExhibition.setSeq(2L);
+
+        when(apiClient.fetchItems(1)).thenReturn(Arrays.asList(validExhibition, nullStartDateExhibition));
+        when(exhibitionRepository.findByApiId(1L)).thenReturn(Optional.empty());
+        when(exhibitionRepository.findByApiId(2L)).thenReturn(Optional.empty());
+        when(museumRepository.findByName("Museum A")).thenReturn(Optional.of(new Museum()));
+        when(museumRepository.findByName("Museum B")).thenReturn(Optional.of(new Museum()));
+
+        // When
+        exhibitionService.fetchExhibitions();
+
+        // Then
+        // Verify that only the valid exhibition was saved
+        verify(exhibitionRepository, times(1)).save(any(Exhibition.class));
+    }
 }

@@ -5,6 +5,8 @@ import com.doma.artserver.api.munhwa.museum.MunwhaMuseumDTO;
 import com.doma.artserver.domain.museum.entity.Museum;
 import com.doma.artserver.domain.museum.repository.MuseumRepository;
 import com.doma.artserver.dto.museum.MuseumDTO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +19,7 @@ import java.util.Optional;
 @Service
 public class MuseumServiceImpl implements MuseumService {
 
+    private static final Logger logger = LoggerFactory.getLogger(MuseumServiceImpl.class);
     private final ApiClient<MunwhaMuseumDTO> apiClient;
     private final MuseumRepository museumRepository;
 
@@ -29,16 +32,25 @@ public class MuseumServiceImpl implements MuseumService {
     @Override
     @Transactional
     public void fetchMuseum() {
+        logger.info("Starting to fetch museum data");
         int page = 1;
         int maxPage = 12;
 
         boolean isDbEmpty = museumRepository.count() == 0;
-        System.out.println("박물관 수 : " + museumRepository.count());
+        logger.info("Current museum count in database: {}", museumRepository.count());
 
-        if (!isDbEmpty) maxPage = 2;
+        if (!isDbEmpty) {
+            maxPage = 2;
+            logger.info("Database is not empty, limiting fetch to {} pages", maxPage - 1);
+        }
 
         while (page < maxPage) {
+            logger.info("Fetching museum data from API - page {}/{}", page, maxPage - 1);
             List<MunwhaMuseumDTO> list = apiClient.fetchItems(page);
+            logger.info("Received {} museums from API on page {}", list.size(), page);
+
+            int savedCount = 0;
+            int duplicateCount = 0;
 
             for (MunwhaMuseumDTO museumDTO : list) {
                 // name (place) 값으로 중복 검사
@@ -47,13 +59,18 @@ public class MuseumServiceImpl implements MuseumService {
                 // 중복되지 않은 경우에만 저장
                 if (existingMuseum.isEmpty()) {
                     museumRepository.save(museumDTO.toEntity());
+                    savedCount++;
                 } else {
-                    System.out.println("중복된 데이터: " + museumDTO.getPlace());
+                    logger.debug("Duplicate museum data found: {}", museumDTO.getPlace());
+                    duplicateCount++;
                 }
             }
+
+            logger.info("Page {} processing complete: {} museums saved, {} duplicates skipped", page, savedCount, duplicateCount);
             page++;
         }
 
+        logger.info("Museum data fetch completed. Total museums in database: {}", museumRepository.count());
     }
 
     @Override
@@ -85,5 +102,3 @@ public class MuseumServiceImpl implements MuseumService {
 
 
 } // MuseumService ends
-
-

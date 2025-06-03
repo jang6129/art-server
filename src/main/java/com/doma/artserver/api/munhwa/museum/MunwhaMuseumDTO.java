@@ -7,7 +7,7 @@ import lombok.*;
 
 @Getter
 @Setter
-@XmlRootElement(name = "perforList")
+@XmlRootElement(name = "item")
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -24,6 +24,12 @@ public class MunwhaMuseumDTO {
 
     @XmlElement(name = "gpsY")
     private String gpsY;
+
+    @XmlElement(name = "seq")
+    private String seq;
+
+    @XmlElement(name = "title")
+    private String title;
 
     @XmlElement(name = "realmName")
     private String realmName;

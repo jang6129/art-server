@@ -28,11 +28,11 @@ public class MunwhaExhibitionXMLParser implements XMLParser<MunwhaExhibitionDTO>
 
         document.getDocumentElement().normalize();
 
-        // perforList 노드 가져오기
-        NodeList nodeList = document.getElementsByTagName("perforList");
+        // item 노드 가져오기
+        NodeList nodeList = document.getElementsByTagName("item");
         List<MunwhaExhibitionDTO> exhibitionList = new ArrayList<>();
 
-        // 각 perforList 노드 탐색
+        // 각 item 노드 탐색
         for (int i = 0; i < nodeList.getLength(); i++) {
             Node node = nodeList.item(i);
 

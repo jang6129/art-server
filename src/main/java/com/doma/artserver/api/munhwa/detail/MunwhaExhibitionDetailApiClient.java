@@ -3,6 +3,8 @@ package com.doma.artserver.api.munhwa.detail;
 import com.doma.artserver.api.ApiClient;
 import com.doma.artserver.api.XMLParser;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -15,6 +17,7 @@ import java.util.List;
 @Component
 public class MunwhaExhibitionDetailApiClient implements ApiClient<MunwhaExhibitionDetailDTO> {
 
+    private static final Logger logger = LoggerFactory.getLogger(MunwhaExhibitionDetailApiClient.class);
     private final RestTemplate restTemplate;
     private final XMLParser<MunwhaExhibitionDetailDTO> xmlParser;
     private final CloseableHttpClient httpClient;
@@ -44,20 +47,32 @@ public class MunwhaExhibitionDetailApiClient implements ApiClient<MunwhaExhibiti
     @Override
     public List<MunwhaExhibitionDetailDTO> fetchItems(Long apiId) {
         URI url = generateUrl(apiId);
-        String response = restTemplate.getForObject(url, String.class);
+        logger.info("Fetching exhibition detail data from API - apiId {}", apiId);
+        logger.debug("API URL: {}", url);
 
-        String utf8Response;
-        try {
-            utf8Response = new String(response.getBytes("ISO-8859-1"), "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("UTF-8 변환 실패", e);
-        }
+        String response = restTemplate.getForObject(url, String.class);
+        logger.debug("Received raw response from API");
+        logger.info("API Response data: {}", response);
 
         List<MunwhaExhibitionDetailDTO> detailList;
 
         try {
-            detailList = xmlParser.parse(utf8Response);
+            detailList = xmlParser.parse(response);
+            logger.info("Successfully parsed detail XML response, found {} details", detailList.size());
+
+            // 파싱된 상세 정보 로깅
+            if (!detailList.isEmpty()) {
+                detailList.forEach(detail -> 
+                    logger.info("Detail information - seq: {}, url: {}, price: {}", 
+                        detail.getSeq(), 
+                        detail.getUrl(), 
+                        detail.getPrice())
+                );
+            } else {
+                logger.warn("No detail information found for apiId: {}", apiId);
+            }
         } catch (Exception e) {
+            logger.error("Failed to parse detail XML response for apiId: {}", apiId, e);
             throw new RuntimeException("파싱 실패", e);
         }
 

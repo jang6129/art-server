@@ -6,7 +6,7 @@ import lombok.*;
 
 @Getter
 @Setter
-@XmlRootElement(name = "perforInfo")
+@XmlRootElement(name = "item")
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -21,4 +21,6 @@ public class MunwhaExhibitionDetailDTO {
     @XmlElement(name = "placeUrl")
     private String placeUrl;
 
+    @XmlElement(name = "seq")
+    private Long seq;
 }

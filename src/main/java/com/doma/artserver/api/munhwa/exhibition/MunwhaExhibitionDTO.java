@@ -13,7 +13,7 @@ import java.time.LocalDate;
 
 @Getter
 @Setter
-@XmlRootElement(name = "perforList")
+@XmlRootElement(name = "item")
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor

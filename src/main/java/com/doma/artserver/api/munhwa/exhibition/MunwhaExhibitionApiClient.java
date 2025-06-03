@@ -8,6 +8,8 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -22,6 +24,7 @@ import java.util.stream.Collectors;
 @Component
 public class MunwhaExhibitionApiClient implements ApiClient<MunwhaExhibitionDTO> {
 
+    private static final Logger logger = LoggerFactory.getLogger(MunwhaExhibitionApiClient.class);
     private final RestTemplate restTemplate;
     private final XMLParser<MunwhaExhibitionDTO> xmlParser;
     private final CloseableHttpClient httpClient;
@@ -43,20 +46,32 @@ public class MunwhaExhibitionApiClient implements ApiClient<MunwhaExhibitionDTO>
 
     @Override
     public List<MunwhaExhibitionDTO> fetchItems(int page) {
+        logger.info("Fetching exhibition data from API - page {}", page);
         URI url = generateUrl(page);
-        String response = restTemplate.getForObject(url, String.class);
+        logger.debug("API URL: {}", url);
 
-        String utf8Response;
-        try {
-            utf8Response = new String(response.getBytes("ISO-8859-1"), "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("UTF-8 변환 실패", e);
-        }
+        String response = restTemplate.getForObject(url, String.class);
+        logger.debug("Received raw response from API");
+        logger.info("API Response data: {}", response);
 
         List<MunwhaExhibitionDTO> exhibitionList;
         try {
-            exhibitionList = xmlParser.parse(utf8Response);
+            exhibitionList = xmlParser.parse(response);
+            logger.info("Successfully parsed XML response, found {} exhibitions", exhibitionList.size());
+
+            // 파싱된 모든 전시회 정보 로깅
+            if (!exhibitionList.isEmpty()) {
+                // 처음 5개 전시회 정보 상세 로깅
+                exhibitionList.stream().limit(5).forEach(exhibition ->
+                        logger.info("Exhibition details - seq: {}, title: {}, place: {}, realmName: {}",
+                                exhibition.getSeq(),
+                                exhibition.getTitle(),
+                                exhibition.getPlace(),
+                                exhibition.getRealmName())
+                );
+            }
         } catch (Exception e) {
+            logger.error("Failed to parse XML response", e);
             throw new RuntimeException("파싱 실패", e);
         }
 
@@ -83,8 +98,8 @@ public class MunwhaExhibitionApiClient implements ApiClient<MunwhaExhibitionDTO>
     @Override
     public URI generateUrl(int page) {
         try {
-            return new URI(BASE_URL + "?realmCode=D000&cPage=" + page +
-                    "&rows=50&sortStdr=1&serviceKey=" + API_KEY);
+            return new URI(BASE_URL + "?realmCode=D000&PageNo=" + page +
+                    "&numOfrows=50&sortStdr=1&serviceKey=" + API_KEY);
         } catch (URISyntaxException e) {
             throw new RuntimeException("URL 생성 실패");
         }
@@ -103,25 +118,30 @@ public class MunwhaExhibitionApiClient implements ApiClient<MunwhaExhibitionDTO>
     public byte[] fetchImageData(String imageUrl) {
         // imageUrl이 null이거나 빈 값인지 확인
         if (imageUrl == null || imageUrl.isEmpty()) {
-            System.err.println("Image URL is null or empty");
+            logger.warn("Image URL is null or empty");
             return null;
         }
 
+        logger.debug("Fetching image data from URL: {}", imageUrl);
         HttpGet request = new HttpGet(imageUrl);
         request.setHeader("User-Agent", "Mozilla/5.0"); // User-Agent 설정
 
         try (CloseableHttpResponse response = httpClient.execute(request)) {
             HttpEntity entity = response.getEntity(); // 응답 엔티티 추출
             if (entity != null) {
-                System.out.println(entity);
-                return EntityUtils.toByteArray(entity); // 엔티티의 바이트 배열 반환
+                logger.debug("Received image entity: {}", entity);
+                byte[] imageData = EntityUtils.toByteArray(entity);
+                logger.debug("Successfully converted image entity to byte array, size: {} bytes",
+                        imageData != null ? imageData.length : 0);
+                return imageData; // 엔티티의 바이트 배열 반환
             } else {
-                System.err.println("No entity found in the response");
+                logger.warn("No entity found in the image response");
             }
         } catch (IOException e) {
-            e.printStackTrace(); // 예외 발생 시 스택 트레이스 출력
+            logger.error("Error fetching image data from URL: {}", imageUrl, e);
         }
 
+        logger.warn("Failed to fetch image data from URL: {}", imageUrl);
         return null; // 실패 시 null 반환
     }
 
@@ -129,10 +149,12 @@ public class MunwhaExhibitionApiClient implements ApiClient<MunwhaExhibitionDTO>
     private String extractFileExtension(String imageUrl) {
         try {
             // URL에서 확장자 추출
-            return imageUrl.substring(imageUrl.lastIndexOf("."));
+            String extension = imageUrl.substring(imageUrl.lastIndexOf("."));
+            logger.debug("Extracted file extension '{}' from URL: {}", extension, imageUrl);
+            return extension;
         } catch (Exception e) {
             // 확장자 추출 실패 시 기본값을 반환 (예: .jpg)
-            System.err.println("Failed to extract file extension from URL: " + imageUrl);
+            logger.warn("Failed to extract file extension from URL: {}, using default extension .jpg", imageUrl);
             return ".jpg"; // 기본 확장자
         }
     }
